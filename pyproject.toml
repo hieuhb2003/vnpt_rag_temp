@@ -78,6 +78,9 @@ dev = [
     "ipdb>=0.13.0",
     "pre-commit>=3.6.0",
 ]
+local = [
+    "sentence-transformers>=2.2.0",
+]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]

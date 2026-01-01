@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from src.config.settings import get_settings
 from src.utils.logging import configure_logging, get_logger
-from src.storage import init_storage, close_storage, vector_store, metadata_store
+from src.storage import init_storage, close_storage, vector_store, metadata_store, cache_store, document_store
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -84,11 +84,31 @@ async def health_check():
     except Exception as e:
         metadata_store_status = f"error: {str(e)}"
 
+    # Cache store status
+    cache_store_status = "unknown"
+    cache_stats = {}
+    try:
+        cache_stats = await cache_store.health_check()
+        cache_store_status = cache_stats.pop("status", "healthy")
+    except Exception as e:
+        cache_store_status = f"error: {str(e)}"
+
+    # Document store status
+    document_store_status = "unknown"
+    document_stats = {}
+    try:
+        document_stats = await document_store.health_check()
+        document_store_status = document_stats.pop("status", "healthy")
+    except Exception as e:
+        document_store_status = f"error: {str(e)}"
+
     # Overall health
-    is_healthy = (
-        vector_store_status == "healthy" and
-        metadata_store_status == "healthy"
-    )
+    is_healthy = all([
+        vector_store_status == "healthy",
+        metadata_store_status == "healthy",
+        cache_store_status == "healthy",
+        document_store_status == "healthy",
+    ])
 
     return {
         "status": "healthy" if is_healthy else "degraded",
@@ -101,6 +121,14 @@ async def health_check():
             "metadata_store": {
                 "status": metadata_store_status,
                 **metadata_stats
+            },
+            "cache_store": {
+                "status": cache_store_status,
+                **cache_stats
+            },
+            "document_store": {
+                "status": document_store_status,
+                **document_stats
             }
         }
     }

@@ -12,6 +12,7 @@ from src.indexing.embedder import (
     get_embedder,
     embedder,
 )
+from src.indexing.index_manager import IndexManager, index_manager, IndexResult
 
 __all__ = [
     "DocumentParserFactory",
@@ -25,4 +26,7 @@ __all__ = [
     "MockEmbedder",
     "get_embedder",
     "embedder",
+    "IndexManager",
+    "index_manager",
+    "IndexResult",
 ]

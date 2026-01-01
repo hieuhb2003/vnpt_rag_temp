@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from src.config.settings import get_settings
 from src.utils.logging import configure_logging, get_logger
+from src.storage import init_storage, close_storage, vector_store, metadata_store
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -18,10 +19,13 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.debug)
     logger.info("Starting RAG System", version="0.1.0")
 
-    # Initialize connections here (will be implemented in TODO-02)
+    # Initialize storage connections
+    await init_storage()
+
     yield
 
-    # Cleanup connections here
+    # Cleanup connections
+    await close_storage()
     logger.info("Shutting down RAG System")
 
 
@@ -43,8 +47,63 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "version": "0.1.0"}
+    """Health check endpoint with storage status."""
+    # Vector store status
+    vector_store_status = "unknown"
+    collections = []
+    try:
+        collections_response = await vector_store.client.get_collections()
+        existing = {c.name for c in collections_response.collections}
+
+        for name, collection_name in vector_store.COLLECTIONS.items():
+            if collection_name in existing:
+                try:
+                    count_info = await vector_store.client.count(collection_name)
+                    collections.append({
+                        "name": name,
+                        "collection": collection_name,
+                        "points": count_info.count,
+                        "status": "ok"
+                    })
+                except Exception as e:
+                    collections.append({"name": name, "collection": collection_name, "status": "error", "error": str(e)})
+            else:
+                collections.append({"name": name, "collection": collection_name, "status": "missing"})
+
+        vector_store_status = "healthy"
+    except Exception as e:
+        vector_store_status = f"error: {str(e)}"
+        collections = []
+
+    # Metadata store status
+    metadata_store_status = "unknown"
+    metadata_stats = {}
+    try:
+        metadata_stats = await metadata_store.health_check()
+        metadata_store_status = metadata_stats.pop("status", "healthy")
+    except Exception as e:
+        metadata_store_status = f"error: {str(e)}"
+
+    # Overall health
+    is_healthy = (
+        vector_store_status == "healthy" and
+        metadata_store_status == "healthy"
+    )
+
+    return {
+        "status": "healthy" if is_healthy else "degraded",
+        "version": "0.1.0",
+        "storage": {
+            "vector_store": {
+                "status": vector_store_status,
+                "collections": collections
+            },
+            "metadata_store": {
+                "status": metadata_store_status,
+                **metadata_stats
+            }
+        }
+    }
 
 
 @app.get("/")

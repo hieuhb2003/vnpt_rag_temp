@@ -232,15 +232,15 @@ class VectorStore:
 
     async def clear_collection(self, collection: str):
         """Delete all vectors from a collection."""
+        from qdrant_client.models import Filter
+
         collection_name = self.COLLECTIONS[collection]
-        # Get all points and delete them
-        count_info = await self.client.count(collection_name)
-        if count_info.count > 0:
-            await self.client.delete(
-                collection_name=collection_name,
-                points_selector=[{"is_empty": False}],
-            )
-            logger.info("Cleared collection", collection=collection_name, deleted=count_info.count)
+        # Delete all points using empty filter (matches everything)
+        await self.client.delete(
+            collection_name=collection_name,
+            points_selector=Filter(must=[]),
+        )
+        logger.info("Cleared collection", collection=collection)
 
 
 # Singleton instance

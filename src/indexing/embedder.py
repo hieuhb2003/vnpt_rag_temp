@@ -408,10 +408,26 @@ class LocalEmbedder(BaseEmbedder):
         """Get the dimension of the embedding vectors."""
         # Common dimensions for popular models
         dimensions_map = {
+            # Multilingual models (good for Vietnamese + English)
             "paraphrase-multilingual-MiniLM-L12-v2": 384,
-            "all-MiniLM-L6-v2": 384,
             "paraphrase-multilingual-mpnet-base-v2": 768,
+            "intfloat/multilingual-e5-large": 1024,
+            "intfloat/multilingual-e5-base": 768,
+            "intfloat/multilingual-e5-small": 384,
+            # English-only models
+            "sentence-transformers/all-MiniLM-L6-v2": 384,
+            "sentence-transformers/all-mpnet-base-v2": 768,
+            "all-MiniLM-L6-v2": 384,
             "all-mpnet-base-v2": 768,
+            # BAAI models (good for QA, English)
+            "BAAI/bge-base-en-v1.5": 768,
+            "BAAI/bge-small-en-v1.5": 384,
+            "bge-base-en-v1.5": 768,
+            "bge-small-en-v1.5": 384,
+            # E5 models (high quality)
+            "intfloat/e5-large-v2": 1024,
+            "intfloat/e5-base-v2": 768,
+            "intfloat/e5-small-v2": 384,
         }
         return dimensions_map.get(self.model_name, 384)
 

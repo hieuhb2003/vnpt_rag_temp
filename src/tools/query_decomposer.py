@@ -85,7 +85,7 @@ Nhiệm vụ của bạn là:
 3. Xác định thứ tự thực hiện tối ưu
 4. Chỉ ra liệu có cần tổng hợp kết quả từ nhiều câu hỏi con không
 
-**QUY TẮ QUAN TRỌNG:**
+**QUY TẮC QUAN TRỌNG:**
 - Chỉ phân tách khi câu hỏi có NHIỀU Ý ĐỊNH hoặc YÊU CẦU PHỨC TẠP
 - Mỗi câu hỏi con phải có thể trả lời độc lập (trừ khi có phụ thuộc rõ ràng)
 - Số lượng câu hỏi con không vượt quá {max_sub_queries}

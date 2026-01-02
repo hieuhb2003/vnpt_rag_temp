@@ -282,8 +282,8 @@ async def _tier1_semantic_check(
                 "similarity": 0.0
             }
 
-        # Use maximum similarity
-        max_similarity = max(similarities)
+        # Use maximum similarity (clamp to [0, 1] to avoid floating point issues)
+        max_similarity = min(max(similarities), 1.0)
 
         # Determine if grounded based on settings
         threshold = settings.groundedness_threshold if hasattr(settings, 'groundedness_threshold') else 0.75

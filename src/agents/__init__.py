@@ -15,6 +15,7 @@ from src.agents.retriever_agent import retriever_agent, RetrieverAgent
 from src.agents.grader_agent import grader_agent, GraderAgent
 from src.agents.synthesizer_agent import synthesizer_agent, SynthesizerAgent
 from src.agents.verifier_agent import verifier_agent, VerifierAgent
+from src.agents.orchestrator import orchestrator, RAGOrchestrator
 
 __all__ = [
     # State
@@ -36,5 +37,8 @@ __all__ = [
     "SynthesizerAgent",
     "synthesizer_agent",
     "VerifierAgent",
-    "verifier_agent"
+    "verifier_agent",
+    # Orchestrator
+    "RAGOrchestrator",
+    "orchestrator"
 ]

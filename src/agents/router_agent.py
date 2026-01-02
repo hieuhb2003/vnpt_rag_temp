@@ -73,7 +73,11 @@ class RouterAgent:
             })
 
             # Determine if decomposition is needed
-            if decompose_result.is_complex and decompose_result.sub_queries:
+            # Consider as "decomposed" if requires_aggregation OR has more than 1 sub_query
+            has_multiple_sub_queries = len(decompose_result.sub_queries) > 1
+            is_complex = decompose_result.requires_aggregation or has_multiple_sub_queries
+
+            if is_complex:
                 state["complexity"] = QueryComplexity.COMPLEX
                 state["is_decomposed"] = True
                 state["sub_queries"] = [
@@ -94,7 +98,8 @@ class RouterAgent:
                     "Query decomposed",
                     extra={
                         "query_id": state["query_id"],
-                        "num_sub_queries": len(decompose_result.sub_queries)
+                        "num_sub_queries": len(decompose_result.sub_queries),
+                        "requires_aggregation": decompose_result.requires_aggregation
                     }
                 )
 

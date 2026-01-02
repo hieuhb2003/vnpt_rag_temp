@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     llm_model: str = "claude-3-5-sonnet-20241022"
+    llm_base_url: str = ""
 
     # Embedding Settings
     embedding_provider: str = "openai"

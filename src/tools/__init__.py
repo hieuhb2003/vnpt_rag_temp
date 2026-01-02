@@ -54,6 +54,31 @@ from src.tools.section_retriever import (
     find_relevant_sections
 )
 
+from src.tools.synthesize_answer import (
+    synthesize_answer_tool,
+    synthesize_answer_tool_sync,
+    Citation,
+    SynthesizeOutput,
+    format_answer_with_citations,
+    synthesize_with_verification
+)
+
+from src.tools.verify_groundedness import (
+    verify_groundedness_tool,
+    verify_groundedness_tool_sync,
+    VerificationOutput
+)
+
+from src.tools.check_freshness import (
+    check_freshness_tool,
+    check_freshness_tool_sync,
+    DocumentFreshness,
+    FreshnessOutput,
+    FRESHNESS_THRESHOLDS,
+    get_freshness_summary,
+    should_use_document
+)
+
 __all__ = [
     # Query Rewriter
     "query_rewriter_tool",
@@ -101,4 +126,26 @@ __all__ = [
     "get_full_section_text",
     "get_sections_by_document",
     "find_relevant_sections",
+
+    # Synthesize Answer
+    "synthesize_answer_tool",
+    "synthesize_answer_tool_sync",
+    "Citation",
+    "SynthesizeOutput",
+    "format_answer_with_citations",
+    "synthesize_with_verification",
+
+    # Verify Groundedness
+    "verify_groundedness_tool",
+    "verify_groundedness_tool_sync",
+    "VerificationOutput",
+
+    # Check Freshness
+    "check_freshness_tool",
+    "check_freshness_tool_sync",
+    "DocumentFreshness",
+    "FreshnessOutput",
+    "FRESHNESS_THRESHOLDS",
+    "get_freshness_summary",
+    "should_use_document",
 ]

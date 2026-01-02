@@ -203,11 +203,17 @@ class MetadataStore:
             )
             return [self._orm_to_section(s) for s in result.scalars().all()]
 
-    async def get_section(self, section_id: UUID) -> Optional[Section]:
+    async def get_section(self, section_id: str) -> Optional[Section]:
         """Get section by ID."""
         async with self.session() as session:
+            # Convert string to UUID if needed
+            try:
+                section_uuid = UUID(section_id) if isinstance(section_id, str) else section_id
+            except ValueError:
+                return None
+
             result = await session.execute(
-                select(SectionORM).where(SectionORM.id == section_id)
+                select(SectionORM).where(SectionORM.id == section_uuid)
             )
             db_section = result.scalar_one_or_none()
             if db_section:
@@ -222,6 +228,22 @@ class MetadataStore:
                 .where(SectionORM.id == section_id)
                 .values(qdrant_section_id=qdrant_id)
             )
+
+    async def get_sections_by_parent(self, parent_id: str) -> List[Section]:
+        """Get all child sections for a parent section."""
+        async with self.session() as session:
+            # Convert string to UUID if needed
+            try:
+                parent_uuid = UUID(parent_id) if isinstance(parent_id, str) else parent_id
+            except ValueError:
+                return []
+
+            result = await session.execute(
+                select(SectionORM)
+                .where(SectionORM.parent_section_id == parent_uuid)
+                .order_by(SectionORM.position)
+            )
+            return [self._orm_to_section(s) for s in result.scalars().all()]
 
     # =============================================================================
     # Chunk Operations

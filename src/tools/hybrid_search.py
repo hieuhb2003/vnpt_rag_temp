@@ -355,7 +355,7 @@ def fuse_results(
     # Update scores and return
     return [
         SearchResult(
-            **item["result"].model_dump(),
+            **{k: v for k, v in item["result"].model_dump().items() if k != "score"},
             score=item["rrf_score"]
         )
         for item in fused

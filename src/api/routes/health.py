@@ -2,12 +2,14 @@
 # Health Route - System health check endpoints
 # =============================================================================
 from fastapi import APIRouter
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional
 import time
 
 from src.storage import vector_store, metadata_store, cache_store, document_store
 from src.utils.logging import get_logger
+from src.utils.metrics import get_metrics
 from sqlalchemy import text
 
 logger = get_logger(__name__)
@@ -186,3 +188,24 @@ async def detailed_health():
         "services": health_data.services,
         "detailed": detailed_info
     }
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def metrics():
+    """
+    Prometheus metrics endpoint.
+
+    Returns all application metrics in Prometheus exposition format.
+    Includes:
+    - Request metrics (count, latency, size)
+    - RAG pipeline metrics (retrieval, synthesis, verification)
+    - Cache metrics (hits, misses, evictions, size)
+    - System metrics (connections, memory, queues)
+    - Agent metrics (execution, latency)
+    - Document processing metrics
+    - LLM metrics (requests, tokens, cost)
+    - Error metrics
+
+    Scraped by Prometheus or compatible monitoring systems.
+    """
+    return await get_metrics()

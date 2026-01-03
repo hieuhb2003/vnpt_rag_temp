@@ -1,16 +1,18 @@
 # =============================================================================
 # Enterprise RAG System - Main Application
 # =============================================================================
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from typing import Optional, Dict, Any
 
 from src.config.settings import get_settings
 from src.utils.logging import configure_logging, get_logger
-from src.storage import init_storage, close_storage, vector_store, metadata_store, cache_store, document_store
+from src.storage import init_storage, close_storage
 
 # API Routes
 from src.api.routes import query, documents, health
+from src.api.routes.query import QueryInput, process_query
 
 # Middleware
 from src.api.middleware.logging import RequestLoggingMiddleware
@@ -73,8 +75,10 @@ app.add_middleware(
 # Health check endpoints (no prefix for k8s compatibility)
 app.include_router(health.router)
 
-# API v1 routes
+# Query endpoint at root level (for convenience)
 app.include_router(query.router, prefix="/api/v1")
+
+# Documents endpoints
 app.include_router(documents.router, prefix="/api/v1")
 
 
@@ -89,9 +93,21 @@ async def root():
             "health": "/health",
             "ready": "/ready",
             "live": "/live",
+            "query": "/query",  # Root level query endpoint
             "api": {
                 "query": "/api/v1/query",
                 "documents": "/api/v1/documents"
             }
         }
     }
+
+
+# Root level query endpoint (convenience alias)
+@app.post("/query")
+async def query_root(input: QueryInput, background_tasks: BackgroundTasks):
+    """
+    Process a query (root level endpoint).
+
+    This is a convenience alias for /api/v1/query.
+    """
+    return await process_query(input, background_tasks)

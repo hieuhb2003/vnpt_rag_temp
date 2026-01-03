@@ -3,7 +3,7 @@
 # =============================================================================
 from src.storage.vector_store import vector_store
 from src.storage.metadata_store import metadata_store
-from src.storage.cache import cache_store
+from src.storage.cache import cache_store, cache_manager
 from src.storage.document_store import document_store
 from src.utils.logging import get_logger
 
@@ -47,6 +47,7 @@ __all__ = [
     "vector_store",
     "metadata_store",
     "cache_store",
+    "cache_manager",
     "document_store",
     "init_storage",
     "close_storage",

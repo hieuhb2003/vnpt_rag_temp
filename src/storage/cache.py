@@ -1,10 +1,12 @@
 # =============================================================================
-# Cache Store - Redis Caching
+# Cache Store - Multi-Level Redis Caching
 # =============================================================================
 import json
 import hashlib
-from typing import Optional, Any, List, Dict
+import asyncio
+from typing import Optional, Any, List, Dict, Callable, Awaitable
 from uuid import UUID
+from collections import OrderedDict
 import numpy as np
 
 from redis.asyncio import Redis, ConnectionPool
@@ -14,6 +16,217 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 settings = get_settings()
 
+
+# =============================================================================
+# Multi-Level Cache Manager
+# =============================================================================
+
+class CacheManager:
+    """
+    Multi-level cache manager with warm-up and monitoring.
+
+    Levels:
+    - L1: In-memory LRU cache (fastest, smallest, ~1000 items)
+    - L2: Redis semantic cache (fast, medium, TTL 3600s)
+    - L3: Redis embedding cache (medium, large, TTL 3600s)
+    """
+
+    def __init__(self, l1_max_size: int = 1000):
+        # L1: In-memory LRU cache using OrderedDict
+        self.l1_cache: OrderedDict[str, Any] = OrderedDict()
+        self.l1_max_size = l1_max_size
+        self.l1_lock = asyncio.Lock()
+
+        # Statistics tracking
+        self.stats = {
+            "l1_hits": 0,
+            "l2_hits": 0,
+            "l3_hits": 0,
+            "misses": 0,
+            "l1_evictions": 0,
+        }
+        self.stats_lock = asyncio.Lock()
+
+    async def get_with_fallback(
+        self,
+        key: str,
+        fetch_func: Callable[[], Awaitable[Any]],
+        cache_level: str = "all",
+        ttl: Optional[int] = None,
+    ) -> Optional[Any]:
+        """
+        Get value with multi-level cache fallback.
+
+        Flow:
+        1. Check L1 (memory) - fastest
+        2. Check L2/L3 (Redis) - populate L1 on hit
+        3. Call fetch_func if miss - populate all levels
+        4. Return value
+
+        Args:
+            key: Cache key
+            fetch_func: Async function to fetch value on cache miss
+            cache_level: Which levels to check ("l1", "l2", "all")
+            ttl: TTL for Redis cache (default from settings)
+
+        Returns:
+            Cached or fetched value
+        """
+        # L1 check (memory)
+        async with self.l1_lock:
+            if key in self.l1_cache:
+                self.stats["l1_hits"] += 1
+                # Update LRU - move to end
+                self.l1_cache.move_to_end(key)
+                logger.debug("L1 cache hit", key=key)
+                return self.l1_cache[key]
+
+        # L2/L3 check (Redis)
+        if cache_level in ("l2", "all"):
+            cached = await cache_store.redis.get(key)
+            if cached:
+                try:
+                    value = json.loads(cached)
+                    async with self.stats_lock:
+                        self.stats["l2_hits"] += 1
+                    # Promote to L1
+                    await self._set_l1(key, value)
+                    logger.debug("L2 cache hit", key=key)
+                    return value
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning("Failed to decode cached value", key=key, error=str(e))
+
+        # Miss - fetch and cache
+        async with self.stats_lock:
+            self.stats["misses"] += 1
+
+        try:
+            value = await fetch_func()
+
+            if value is not None:
+                # Populate L1
+                await self._set_l1(key, value)
+
+                # Populate L2/L3 (Redis)
+                if cache_level in ("l2", "all"):
+                    ttl = ttl or settings.cache_semantic_ttl
+                    try:
+                        await cache_store.redis.setex(
+                            key,
+                            ttl,
+                            json.dumps(value)
+                        )
+                        logger.debug("Cached value", key=key, ttl=ttl)
+                    except Exception as e:
+                        logger.warning("Failed to cache in Redis", key=key, error=str(e))
+
+            return value
+
+        except Exception as e:
+            logger.error("Failed to fetch value", key=key, error=str(e))
+            return None
+
+    async def _set_l1(self, key: str, value: Any):
+        """Set L1 cache with LRU eviction."""
+        async with self.l1_lock:
+            # Evict oldest if at capacity
+            if len(self.l1_cache) >= self.l1_max_size:
+                oldest_key, _ = self.l1_cache.popitem(last=False)
+                async with self.stats_lock:
+                    self.stats["l1_evictions"] += 1
+                logger.debug("L1 eviction", key=oldest_key)
+
+            # Set new value
+            self.l1_cache[key] = value
+            logger.debug("L1 cache set", key=key, size=len(self.l1_cache))
+
+    async def invalidate_l1(self, key: str):
+        """Invalidate key from L1 cache."""
+        async with self.l1_lock:
+            if key in self.l1_cache:
+                del self.l1_cache[key]
+                logger.debug("L1 cache invalidated", key=key)
+
+    async def invalidate_all_l1(self):
+        """Clear all L1 cache."""
+        async with self.l1_lock:
+            self.l1_cache.clear()
+            logger.info("L1 cache cleared")
+
+    async def get_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics.
+
+        Returns:
+            Dict with hit rates, cache sizes, and evictions
+        """
+        async with self.stats_lock:
+            total_hits = (
+                self.stats["l1_hits"] +
+                self.stats["l2_hits"] +
+                self.stats["l3_hits"]
+            )
+            total_requests = total_hits + self.stats["misses"]
+            hit_rate = total_hits / total_requests if total_requests > 0 else 0
+
+            l1_hit_rate = (
+                self.stats["l1_hits"] / total_requests
+                if total_requests > 0 else 0
+            )
+            l2_hit_rate = (
+                self.stats["l2_hits"] / total_requests
+                if total_requests > 0 else 0
+            )
+
+            return {
+                **self.stats,
+                "total_requests": total_requests,
+                "hit_rate": hit_rate,
+                "l1_hit_rate": l1_hit_rate,
+                "l2_hit_rate": l2_hit_rate,
+                "l1_size": len(self.l1_cache),
+                "l1_capacity": self.l1_max_size,
+                "l1_utilization": len(self.l1_cache) / self.l1_max_size,
+            }
+
+    async def reset_stats(self):
+        """Reset cache statistics."""
+        async with self.stats_lock:
+            self.stats = {
+                "l1_hits": 0,
+                "l2_hits": 0,
+                "l3_hits": 0,
+                "misses": 0,
+                "l1_evictions": 0,
+            }
+        logger.info("Cache stats reset")
+
+    async def warm_l1(self, items: Dict[str, Any]):
+        """
+        Warm L1 cache with pre-computed values.
+
+        Args:
+            items: Dictionary of key -> value pairs to cache
+        """
+        async with self.l1_lock:
+            for key, value in items.items():
+                # Evict if necessary
+                if len(self.l1_cache) >= self.l1_max_size:
+                    self.l1_cache.popitem(last=False)
+                    self.stats["l1_evictions"] += 1
+
+                self.l1_cache[key] = value
+
+        logger.info("L1 cache warmed", count=len(items))
+
+
+# Singleton cache manager instance
+cache_manager = CacheManager(l1_max_size=1000)
+
+
+# =============================================================================
+# Redis Cache Store
+# =============================================================================
 
 class CacheStore:
     """Async Redis cache store with embedding, semantic, and retrieval caching."""
